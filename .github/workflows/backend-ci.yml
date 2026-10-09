@@ -14,61 +14,41 @@ env:
   ROLE_ARN: arn:aws:iam::652310866649:role/taskflow-dev-github-actions-role
 
 jobs:
-  build-and-push:
+  diagnose:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: backend
-        run: npm ci
-
-      - name: Type check and build
-        working-directory: backend
-        run: npm run build
-
-      - name: Debug GitHub context
+      - name: Show GitHub Context
         run: |
-          echo "Repo: ${{ github.repository }}"
-          echo "Ref: ${{ github.ref }}"
-          echo "Actor: ${{ github.actor }}"
+          echo "repo=${{ github.repository }}"
+          echo "ref=${{ github.ref }}"
+          echo "actor=${{ github.actor }}"
+          echo "event=${{ github.event_name }}"
 
-      - name: Configure AWS (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: gha-backend-${{ github.run_id }}
+      - name: Decode OIDC JWT manually
+        run: |
+          set -x
+          RESP=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+          echo "raw_response=$RESP"
+          TOKEN=$(echo "$RESP" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p')
+          echo "token_length=${#TOKEN}"
+          PAYLOAD=$(echo "$TOKEN" | cut -d. -f2)
+          # Add padding if needed
+          case $((${#PAYLOAD} % 4)) in
+            2) PAYLOAD="${PAYLOAD}==" ;;
+            3) PAYLOAD="${PAYLOAD}=" ;;
+          esac
+          echo "decoded_payload=$(echo "$PAYLOAD" | tr '_-' '/+' | base64 -d 2>/dev/null)"
 
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
-
-      - name: Login to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Setup Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: |
-            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Try STS manually (no action)
+        run: |
+          set -x
+          RESP=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+          TOKEN=$(echo "$RESP" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p')
+          aws sts assume-role-with-web-identity \
+            --role-arn "$ROLE_ARN" \
+            --role-session-name "manual-test" \
+            --web-identity-token "$TOKEN" \
+            --region ap-south-1 || echo "MANUAL STS FAILED"
