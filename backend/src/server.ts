@@ -46,5 +46,5 @@ app.get('/metrics', (_req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 TaskFlow backend running on port ${PORT}`);
+  console.log(`🚀 TaskFlow backend v1.0.0 running on port ${PORT}`);
 });
