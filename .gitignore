@@ -147,3 +147,47 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
